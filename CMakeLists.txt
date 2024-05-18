@@ -21,3 +21,12 @@ add_subdirectory(7b)
 
 add_subdirectory(8a)
 add_subdirectory(8b)
+
+add_subdirectory(9a)
+add_subdirectory(9b)
+
+add_subdirectory(10a)
+add_subdirectory(10b)
+
+add_subdirectory(11a)
+add_subdirectory(11b)
