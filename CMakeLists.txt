@@ -30,3 +30,6 @@ add_subdirectory(10b)
 
 add_subdirectory(11a)
 add_subdirectory(11b)
+
+add_subdirectory(12a)
+add_subdirectory(12b)
