@@ -44,11 +44,11 @@ inline bool IsCurrentGeyserGroupValid
     return springs[currentIndex] != GeyserStatus::Ok;
 }
 
-struct TupleHash : public std::unary_function<std::tuple<int32_t, int32_t>, std::size_t>
+struct TupleHash : public std::unary_function<std::tuple<int32_t, int32_t, int32_t>, std::size_t>
 {
- std::size_t operator()(const std::tuple<int32_t, int32_t>& k) const
+ std::size_t operator()(const std::tuple<int32_t, int32_t, int32_t>& k) const
  {
-   return (size_t)std::get<0>(k) << 32 | (size_t)std::get<1>(k);
+   return (size_t)std::get<0>(k) << 48 | (size_t)std::get<1>(k) << 24 | (size_t)std::get<2>(k);
  }
 };
 
@@ -59,10 +59,10 @@ size_t CalculateCombinations
     , int32_t currentGeyserGroupSize
     , int32_t numValidSpringsLeft
     , int32_t numUnknownSpringsLeft
-    , std::unordered_map<std::tuple<int32_t, int32_t>, size_t, TupleHash>& combinationsMap
+    , std::unordered_map<std::tuple<int32_t, int32_t, int32_t>, size_t, TupleHash>& combinationsMap
     )
 {
-    auto it = combinationsMap.find(std::make_tuple(groups.size(), currentIndex));
+    auto it = combinationsMap.find(std::make_tuple(groups.size(), currentIndex, currentGeyserGroupSize));
     if (it != combinationsMap.end())
     {
         return it->second;
@@ -94,7 +94,7 @@ size_t CalculateCombinations
         {
             --numUnknownSpringsLeft;
         }
-        retVal = CalculateCombinations(springs, groups, --currentIndex, currentGeyserGroupSize - 1, numValidSpringsLeft, numUnknownSpringsLeft, combinationsMap);
+        retVal = CalculateCombinations(springs, groups, currentIndex - 1, currentGeyserGroupSize - 1, numValidSpringsLeft, numUnknownSpringsLeft, combinationsMap);
     }
     else if (currentGeyserGroupSize == 0)
     {
@@ -102,35 +102,35 @@ size_t CalculateCombinations
         {
             --numUnknownSpringsLeft;
         }
-        retVal = CalculateCombinations(springs, groups, --currentIndex, currentGeyserGroupSize - 1, numValidSpringsLeft, numUnknownSpringsLeft, combinationsMap);
+        retVal = CalculateCombinations(springs, groups, currentIndex - 1, currentGeyserGroupSize - 1, numValidSpringsLeft, numUnknownSpringsLeft, combinationsMap);
     }
     else // if currentGeyserGroupSize < 0
     {
         if (springs[currentIndex] == GeyserStatus::Ok)
         {
-            retVal = CalculateCombinations(springs, groups, --currentIndex, currentGeyserGroupSize, numValidSpringsLeft, numUnknownSpringsLeft, combinationsMap);
+            retVal = CalculateCombinations(springs, groups, currentIndex - 1, currentGeyserGroupSize, numValidSpringsLeft, numUnknownSpringsLeft, combinationsMap);
         }
         else
         {
             if (springs[currentIndex] == GeyserStatus::Damaged)
             {
                 --numValidSpringsLeft;
-                currentGeyserGroupSize = groups.back();
+                int newCurrentGeyserGroupSize = groups.back();
                 groups.pop_back();
-                retVal = CalculateCombinations(springs, groups, --currentIndex, currentGeyserGroupSize - 1, numValidSpringsLeft, numUnknownSpringsLeft, combinationsMap);
-                groups.push_back(currentGeyserGroupSize);
+                retVal = CalculateCombinations(springs, groups, currentIndex - 1, newCurrentGeyserGroupSize - 1, numValidSpringsLeft, numUnknownSpringsLeft, combinationsMap);
+                groups.push_back(newCurrentGeyserGroupSize);
             }
             else // GeyserStatus::Unknown
             {
                 retVal = CalculateCombinations(springs, groups, currentIndex - 1, -1, numValidSpringsLeft, numUnknownSpringsLeft - 1, combinationsMap);
-                currentGeyserGroupSize = groups.back();
+                int newCurrentGeyserGroupSize = groups.back();
                 groups.pop_back();                    
-                retVal += CalculateCombinations(springs, groups, currentIndex - 1, currentGeyserGroupSize - 1, numValidSpringsLeft, numUnknownSpringsLeft - 1, combinationsMap);
-                groups.push_back(currentGeyserGroupSize);
+                retVal += CalculateCombinations(springs, groups, currentIndex - 1, newCurrentGeyserGroupSize - 1, numValidSpringsLeft, numUnknownSpringsLeft - 1, combinationsMap);
+                groups.push_back(newCurrentGeyserGroupSize);
             }
         }
     }
-    auto result = combinationsMap.emplace(std::make_tuple(groups.size(), currentIndex), retVal);
+    auto result = combinationsMap.emplace(std::make_tuple(groups.size(), currentIndex, currentGeyserGroupSize), retVal);
     assert(result.second);
     return retVal;
 }
@@ -139,8 +139,11 @@ size_t StartCalculations(const std::vector<GeyserStatus>& springs, std::vector<i
 {
     int32_t numSprings = std::count_if(springs.begin(), springs.end(), [](GeyserStatus g){ return g == GeyserStatus::Damaged;});
     int32_t numUnknown = std::count_if(springs.begin(), springs.end(), [](GeyserStatus g){ return g == GeyserStatus::Unknown;});
-    std::unordered_map<std::tuple<int32_t, int32_t>, size_t, TupleHash> combinationsMap{};
-    return CalculateCombinations(springs, groups, springs.size()-1, -1, numSprings, numUnknown, combinationsMap);
+    std::unordered_map<std::tuple<int32_t, int32_t, int32_t>, size_t, TupleHash> combinationsMap{};
+    auto oryginalGroups = groups;
+    size_t retVal = CalculateCombinations(springs, groups, springs.size()-1, -1, numSprings, numUnknown, combinationsMap);
+    assert(oryginalGroups == groups);
+    return retVal;
 }
 
 size_t ParseLine(std::string line)
@@ -191,7 +194,7 @@ size_t ParseLine(std::string line)
         }
     }    
     
-    return StartCalculations(oldSprings, oldGroups);
+    return StartCalculations(springs, groups);
 }
 
 size_t SolveGame(const std::string& input)
@@ -213,7 +216,7 @@ size_t SolveGame(const std::string& input)
 int main(){
 
     SolveGame(testInput);
-    // SolveGame(gameInput);
+    SolveGame(gameInput);
 
     return 0;
 }
