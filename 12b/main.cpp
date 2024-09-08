@@ -17,6 +17,7 @@
 #include <chrono>
 #include <thread>
 #include <deque>
+#include <numeric>
 
 enum GeyserStatus
 {
@@ -25,89 +26,109 @@ enum GeyserStatus
     Unknown
 };
 
-size_t CalculateSpecyficCombinations( const std::vector<GeyserStatus>& springs
-                                    , std::deque<size_t>& groups
-                                    , std::map<std::pair<size_t, size_t>, size_t>& combinationsMap
-                                    , size_t startIndex);
-
-size_t ConsumeGeyserGroup(            const std::vector<GeyserStatus>& springs
-                                    , std::deque<size_t>& groups
-                                    , std::map<std::pair<size_t, size_t>, size_t> combinationsMap
-                                    , size_t startIndex
-                                    , size_t groupSize)
+inline bool IsCurrentGeyserGroupValid
+( const std::vector<GeyserStatus>& springs
+, int currentIndex
+, int currentGeyserGroupSize
+)
 {
-    if (springs.size() - startIndex < groupSize)
+    if (currentGeyserGroupSize < 0)
     {
-        return 0;
+        return true;
     }
-    
-    if  (groupSize == 0)
+    else if (currentGeyserGroupSize == 0)
     {
-        // end of input case
-        if (springs.size() - startIndex == 0)
-        {
-            return CalculateSpecyficCombinations(springs, groups, combinationsMap, startIndex);
-        }
-        
-        // check if there is possible 1 blank space 
-        return springs[startIndex] == Damaged ? 0 : CalculateSpecyficCombinations(springs, groups, combinationsMap, startIndex + 1);
+        return springs[currentIndex] != GeyserStatus::Damaged;
     }
-    
-    if (springs[startIndex] == Ok)
-    {
-        return 0;
-    }
-
-    return ConsumeGeyserGroup(springs, groups, combinationsMap, startIndex + 1, groupSize - 1);
-
+    // currentGroup > 0
+    return springs[currentIndex] != GeyserStatus::Ok;
 }
 
-size_t CalculateSpecyficCombinations( const std::vector<GeyserStatus>& springs
-                                    , std::deque<size_t>& groups
-                                    , std::map<std::pair<size_t, size_t>, size_t>& combinationsMap
-                                    , size_t startIndex)
+size_t CalculateCombinations
+    ( const std::vector<GeyserStatus>& springs
+    , std::vector<int>& groups
+    , int currentIndex
+    , int currentGeyserGroupSize
+    , int numValidSpringsLeft
+    , int numUnknownSpringsLeft
+    )
 {
-    if (combinationsMap.count(std::make_pair(startIndex, groups.size())))
+    if  (   groups.size() == 0
+        &&  currentGeyserGroupSize == 0
+        )
     {
-        return combinationsMap[std::make_pair(startIndex, groups.size())];
+        return numValidSpringsLeft == 0 ? 1 : 0;
     }
-
-    if (startIndex >= springs.size())
+    
+    if  (    currentIndex < 0
+        ||  !IsCurrentGeyserGroupValid(springs, currentIndex, currentGeyserGroupSize)
+        ||   (numUnknownSpringsLeft == 0 && numValidSpringsLeft == 0)
+        )
     {
-        return groups.size() ? 0 : 1;
+        return 0;
     }
 
     size_t retVal = 0;
-    if (springs[startIndex] == Ok || springs[startIndex] == Unknown)
+    if (currentGeyserGroupSize > 0)
     {
-        retVal = CalculateSpecyficCombinations(springs, groups, combinationsMap, startIndex+1);
+        if (springs[currentIndex]==GeyserStatus::Damaged)
+        {
+            --numValidSpringsLeft;
+        }
+        else if (springs[currentIndex]==GeyserStatus::Unknown)
+        {
+            --numUnknownSpringsLeft;
+        }
+        retVal = CalculateCombinations(springs, groups, --currentIndex, currentGeyserGroupSize - 1, numValidSpringsLeft, numUnknownSpringsLeft);
     }
-    
-    if (springs[startIndex] == Damaged || springs[startIndex] == Unknown)
+    else if (currentGeyserGroupSize == 0)
     {
-        size_t groupSize = groups.front();
-        groups.pop_front();
-        retVal += ConsumeGeyserGroup(springs, groups, combinationsMap, startIndex, groupSize);
-        groups.push_front(groupSize);
+        if (springs[currentIndex]==GeyserStatus::Unknown)
+        {
+            --numUnknownSpringsLeft;
+        }
+        retVal = CalculateCombinations(springs, groups, --currentIndex, currentGeyserGroupSize - 1, numValidSpringsLeft, numUnknownSpringsLeft);
     }
-
-    combinationsMap[std::make_pair(startIndex, groups.size())] = retVal;
+    else // if currentGeyserGroupSize < 0
+    {
+        if (springs[currentIndex] == GeyserStatus::Ok)
+        {
+            retVal = CalculateCombinations(springs, groups, --currentIndex, currentGeyserGroupSize, numValidSpringsLeft, numUnknownSpringsLeft);
+        }
+        else
+        {
+            if (springs[currentIndex] == GeyserStatus::Damaged)
+            {
+                --numValidSpringsLeft;
+                currentGeyserGroupSize = groups.back();
+                groups.pop_back();
+                retVal = CalculateCombinations(springs, groups, --currentIndex, currentGeyserGroupSize - 1, numValidSpringsLeft, numUnknownSpringsLeft);
+                groups.push_back(currentGeyserGroupSize);
+            }
+            else // GeyserStatus::Unknown
+            {
+                retVal = CalculateCombinations(springs, groups, currentIndex - 1, -1, numValidSpringsLeft, numUnknownSpringsLeft - 1);
+                currentGeyserGroupSize = groups.back();
+                groups.pop_back();                    
+                retVal += CalculateCombinations(springs, groups, currentIndex - 1, currentGeyserGroupSize - 1, numValidSpringsLeft, numUnknownSpringsLeft - 1);
+                groups.push_back(currentGeyserGroupSize);
+            }
+        }
+    }
     return retVal;
 }
 
-size_t CalculateCombinations(const std::vector<GeyserStatus>& springs, std::deque<size_t>& groups)
+size_t StartCalculations(const std::vector<GeyserStatus>& springs, std::vector<int>& groups)
 {
-    std::map<std::pair<size_t, size_t>, size_t> combinationsMap; // key - start index, groups left; value - num combinations for given key
-
-    CalculateSpecyficCombinations(springs, groups, combinationsMap, 0);
-
-    return combinationsMap[std::make_pair(0, groups.size())];
+    int numSprings = std::count_if(springs.begin(), springs.end(), [](GeyserStatus g){ return g == GeyserStatus::Damaged;});
+    int numUnknown = std::count_if(springs.begin(), springs.end(), [](GeyserStatus g){ return g == GeyserStatus::Unknown;});
+    return CalculateCombinations(springs, groups, springs.size()-1, -1, numSprings, numUnknown);
 }
 
 size_t ParseLine(std::string line)
 {
     std::vector<GeyserStatus> oldSprings;
-    std::deque<size_t> oldGroups;
+    std::vector<int> oldGroups;
     const size_t spaceIdx = line.find(' ');
 
     for (size_t i = 0; i < spaceIdx; i++)
@@ -143,7 +164,7 @@ size_t ParseLine(std::string line)
         line.erase(0, pos+1);
     }
 
-    std::deque<size_t> groups;
+    std::vector<int> groups;
     for (size_t i = 0; i < 5; i++)
     {
         for (const auto& oldGroup : oldGroups)
@@ -152,7 +173,7 @@ size_t ParseLine(std::string line)
         }
     }    
     
-    return CalculateCombinations(springs, groups);
+    return StartCalculations(oldSprings, oldGroups);
 }
 
 size_t SolveGame(const std::string& input)
@@ -163,7 +184,7 @@ size_t SolveGame(const std::string& input)
     while (std::getline(stream, line))
     {
         unsigned subresult = ParseLine(line); 
-        std::cout << std::endl << "The subresult is " << subresult << std::endl;
+        std::cout << "The subresult is " << subresult << std::endl;
         result += subresult;
     }
     
@@ -173,8 +194,8 @@ size_t SolveGame(const std::string& input)
 
 int main(){
 
-    // SolveGame(testInput);
-    SolveGame(gameInput);
+    SolveGame(testInput);
+    // SolveGame(gameInput);
 
     return 0;
 }
