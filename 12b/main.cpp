@@ -62,6 +62,9 @@ size_t CalculateCombinations
     , std::unordered_map<std::tuple<int32_t, int32_t, int32_t>, size_t, TupleHash>& combinationsMap
     )
 {
+    assert(numValidSpringsLeft>=0);
+    assert(numUnknownSpringsLeft>=0);
+    assert(currentGeyserGroupSize>=-1);
     auto it = combinationsMap.find(std::make_tuple(groups.size(), currentIndex, currentGeyserGroupSize));
     if (it != combinationsMap.end())
     {
@@ -69,10 +72,12 @@ size_t CalculateCombinations
     }
     
     if  (   groups.size() == 0
-        &&  currentGeyserGroupSize == 0
+        &&  currentGeyserGroupSize <= 0
         )
     {
-        return numValidSpringsLeft == 0 ? 1 : 0;
+        auto res = combinationsMap.emplace(std::make_tuple(groups.size(), currentIndex, currentGeyserGroupSize), numValidSpringsLeft == 0);
+        assert(res.second);
+        return numValidSpringsLeft == 0;
     }
     
     if  (    currentIndex < 0
@@ -80,6 +85,8 @@ size_t CalculateCombinations
         ||   (numUnknownSpringsLeft == 0 && numValidSpringsLeft == 0)
         )
     {
+        auto res = combinationsMap.emplace(std::make_tuple(groups.size(), currentIndex, currentGeyserGroupSize), 0);
+        assert(res.second);
         return 0;
     }
 
@@ -114,10 +121,9 @@ size_t CalculateCombinations
         {
             if (springs[currentIndex] == GeyserStatus::Damaged)
             {
-                --numValidSpringsLeft;
                 int newCurrentGeyserGroupSize = groups.back();
                 groups.pop_back();
-                retVal = CalculateCombinations(springs, groups, currentIndex - 1, newCurrentGeyserGroupSize - 1, numValidSpringsLeft, numUnknownSpringsLeft, combinationsMap);
+                retVal = CalculateCombinations(springs, groups, currentIndex - 1, newCurrentGeyserGroupSize - 1, numValidSpringsLeft - 1, numUnknownSpringsLeft, combinationsMap);
                 groups.push_back(newCurrentGeyserGroupSize);
             }
             else // GeyserStatus::Unknown
@@ -204,7 +210,7 @@ size_t SolveGame(const std::string& input)
     size_t result = 0;
     while (std::getline(stream, line))
     {
-        unsigned subresult = ParseLine(line); 
+        size_t subresult = ParseLine(line); 
         std::cout << "The subresult is " << subresult << std::endl;
         result += subresult;
     }
